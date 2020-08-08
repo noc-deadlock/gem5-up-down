@@ -81,14 +81,16 @@ parser.add_option("--inj-vnet", type="int", default=-1,
                   help="Only inject in this vnet (0, 1 or 2).\
                         0 and 1 are 1-flit, 2 is 5-flit.\
                         Set to -1 to inject randomly in all vnets.")
+parser.add_option("--sim-type", type="int", default=1,
+                  help="to run the garnet simulation in default mode\
+                  or run it in warm-up -- cool-down mode.")
 
 #
 # Add the ruby specific and protocol specific options
 #
 Ruby.define_options(parser)
 
-exec(compile(open(os.path.join(config_root, "common", "Options.py")).read(),
-             os.path.join(config_root, "common", "Options.py"), 'exec'))
+execfile(os.path.join(config_root, "common", "Options.py"))
 
 (options, args) = parser.parse_args()
 
@@ -112,8 +114,9 @@ cpus = [ GarnetSyntheticTraffic(
                      inj_rate=options.injectionrate,
                      inj_vnet=options.inj_vnet,
                      precision=options.precision,
-                     num_dest=options.num_dirs) \
-         for i in range(options.num_cpus) ]
+                     num_dest=options.num_dirs,
+                     sim_type=options.sim_type) \
+         for i in xrange(options.num_cpus) ]
 
 # create the desired simulated system
 system = System(cpu = cpus, mem_ranges = [AddrRange(options.mem_size)])

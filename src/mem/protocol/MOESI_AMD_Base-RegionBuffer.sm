@@ -311,8 +311,9 @@ machine(MachineType:RegionBuffer, "Region Buffer for AMD_Base-like protocol")
     return AccessPermission:NotPresent;
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     functionalMemoryRead(pkt);
+    return true;
   }
 
   int functionalWrite(Addr addr, Packet *pkt) {

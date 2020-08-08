@@ -148,6 +148,12 @@ class InputUnit : public Consumer
     uint32_t functionalWrite(Packet *pkt);
     void resetStats();
 
+    int get_id() { return m_id; }
+    bool vc_isEmpty(int vc_) {
+        assert(vc_ < m_vcs.size());
+        return m_vcs[vc_]->isEmpty();
+    }
+
   private:
     int m_id;
     PortDirection m_direction;

@@ -162,12 +162,13 @@ machine(MachineType:TCC, "TCC Cache")
     }
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     TBE tbe := TBEs.lookup(addr);
     if(is_valid(tbe)) {
-      testAndRead(addr, tbe.DataBlk, pkt);
+      return testAndRead(addr, tbe.DataBlk, pkt);
     } else {
       functionalMemoryRead(pkt);
+      return true;
     }
   }
 

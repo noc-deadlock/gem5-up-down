@@ -51,6 +51,7 @@ class MeshDirCorners_XY(SimpleTopology):
         # Can be over-ridden on a per link/router basis
         link_latency = options.link_latency # used by simple and garnet
         router_latency = options.router_latency # only used by garnet
+        marked_flt = options.marked_flt_per_node # number of marked flits
 
 
         # First determine which nodes are cache cntrls vs. dirs vs. dma
@@ -78,7 +79,7 @@ class MeshDirCorners_XY(SimpleTopology):
         assert(len(dir_nodes) == 4)
 
         # Create the routers in the mesh
-        routers = [Router(router_id=i, latency = router_latency) \
+        routers = [Router(router_id=i, latency = router_latency, marked_flit = marked_flt) \
             for i in range(num_routers)]
         network.routers = routers
 

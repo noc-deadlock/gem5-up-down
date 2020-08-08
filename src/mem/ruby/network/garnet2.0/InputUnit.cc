@@ -90,6 +90,14 @@ InputUnit::wakeup()
         t_flit = m_in_link->consumeLink();
         int vc = t_flit->get_vc();
         t_flit->increment_hops(); // for stats
+        int vnet_ = t_flit->get_vnet();
+        int vc_base_ = vnet_*m_vc_per_vnet;
+        int eVC_ = vc_base_ + (m_vc_per_vnet - 1);
+        /**stats for updating vc**/
+        if(vc == eVC_)
+            t_flit->increment_eVC_hops();
+        else
+            t_flit->increment_nVC_hops();
 
         if ((t_flit->get_type() == HEAD_) ||
             (t_flit->get_type() == HEAD_TAIL_)) {
@@ -97,15 +105,30 @@ InputUnit::wakeup()
             assert(m_vcs[vc]->get_state() == IDLE_);
             set_vc_active(vc, m_router->curCycle());
 
+            // print flit's 'path_info'
+            #if DEBUG_PRINT
+            cout << "printing flit's information: " << endl;
+            t_flit->print_path_info();
+            cout << endl;
+            cout.flush();
+            #endif
             // Route computation for this vc
             int outport = m_router->route_compute(t_flit->get_route(),
-                m_id, m_direction);
-
+                vc, m_id, m_direction, false);
+            assert(outport >= 0);
+            assert(outport < m_router->get_num_outports());
+            // you are not saving the outport in the flit.
             // Update output port in VC
             // All flits in this packet will use this output port
             // The output port field in the flit is updated after it wins SA
             grant_outport(vc, outport);
-
+            // also set the outport in the flit.. for checking pupose
+            t_flit->set_outport(outport);
+            #if DEBUG_PRINT
+            // update the flit structure here...
+            t_flit->push_back_info_(vc, m_id, m_direction,
+                                    m_router->get_id());
+            #endif
         } else {
             assert(m_vcs[vc]->get_state() == ACTIVE_);
         }

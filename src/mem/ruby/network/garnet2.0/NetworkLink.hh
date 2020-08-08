@@ -71,6 +71,8 @@ class NetworkLink : public ClockedObject, public Consumer
 
     uint32_t functionalWrite(Packet *);
     void resetStats();
+    int src_id;
+    int dst_id;
 
   private:
     const int m_id;

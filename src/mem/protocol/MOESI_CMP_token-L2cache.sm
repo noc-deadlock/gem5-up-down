@@ -163,8 +163,8 @@ machine(MachineType:L2Cache, "Token protocol")
     return localDirectory.lookup(address);
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
-    testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+  bool functionalRead(Addr addr, Packet *pkt) {
+    return testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
   }
 
   int functionalWrite(Addr addr, Packet *pkt) {

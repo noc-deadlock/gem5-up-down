@@ -158,20 +158,21 @@ structure (VIPERCoalescer, external = "yes") {
 }
 
 structure(RubyRequest, desc="...", interface="Message", external="yes") {
-  Addr LineAddress,       desc="Line address for this request";
-  Addr PhysicalAddress,   desc="Physical address for this request";
-  RubyRequestType Type,      desc="Type of request (LD, ST, etc)";
-  Addr ProgramCounter,    desc="Program counter of the instruction that caused the miss";
-  RubyAccessMode AccessMode, desc="user/supervisor access type";
-  int Size,                  desc="size in bytes of access";
-  PrefetchBit Prefetch,      desc="Is this a prefetch request";
-  int contextId,             desc="this goes away but must be replace with Nilay";
-  WriteMask writeMask,       desc="Writethrough mask";
-  DataBlock WTData,          desc="Writethrough data block";
-  int wfid,                  desc="Writethrough wavefront";
-  HSAScope scope,            desc="HSA scope";
-  HSASegment segment,        desc="HSA segment";
-  PacketPtr pkt,             desc="Packet associated with this request";
+  Addr LineAddress,            desc="Line address for this request";
+  Addr PhysicalAddress,        desc="Physical address for this request";
+  RubyRequestType Type,        desc="Type of request (LD, ST, etc)";
+  RubyRequestType PrimaryType, desc="Type of primary request";
+  Addr ProgramCounter,         desc="Program counter of the instruction that caused the miss";
+  RubyAccessMode AccessMode,   desc="user/supervisor access type";
+  int Size,                    desc="size in bytes of access";
+  PrefetchBit Prefetch,        desc="Is this a prefetch request";
+  int contextId,               desc="this goes away but must be replace with Nilay";
+  WriteMask writeMask,         desc="Writethrough mask";
+  DataBlock WTData,            desc="Writethrough data block";
+  int wfid,                    desc="Writethrough wavefront";
+  HSAScope scope,              desc="HSA scope";
+  HSASegment segment,          desc="HSA segment";
+  PacketPtr pkt,               desc="Packet associated with this request";
 }
 
 structure(AbstractEntry, primitive="yes", external = "yes") {

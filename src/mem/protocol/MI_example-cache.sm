@@ -122,7 +122,10 @@ machine(MachineType:L1Cache, "MI Example L1 Cache")
       return Event:Load;
     } else if (type == RubyRequestType:IFETCH) {
       return Event:Ifetch;
-    } else if ((type == RubyRequestType:ST) || (type == RubyRequestType:ATOMIC)) {
+    } else if ((type == RubyRequestType:ST) ||
+               (type == RubyRequestType:ATOMIC) ||
+               (type == RubyRequestType:ATOMIC_NO_RETURN) ||
+               (type == RubyRequestType:ATOMIC_RETURN)) {
       return Event:Store;
     } else {
       error("Invalid RubyRequestType");
@@ -173,12 +176,12 @@ machine(MachineType:L1Cache, "MI Example L1 Cache")
     }
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     TBE tbe := TBEs[addr];
     if(is_valid(tbe)) {
-      testAndRead(addr, tbe.DataBlk, pkt);
+      return testAndRead(addr, tbe.DataBlk, pkt);
     } else {
-      testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+      return testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
     }
   }
 

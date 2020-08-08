@@ -40,7 +40,8 @@
 #include "mem/ruby/common/Consumer.hh"
 #include "mem/ruby/network/garnet2.0/CommonTypes.hh"
 #include "mem/ruby/network/garnet2.0/CreditLink.hh"
-#include "mem/ruby/network/garnet2.0/GarnetNetwork.hh"
+#include "mem/ruby/network/garnet2.0/Router.hh"
+//#include "mem/ruby/network/garnet2.0/GarnetNetwork.hh"
 #include "mem/ruby/network/garnet2.0/NetworkLink.hh"
 #include "mem/ruby/network/garnet2.0/OutVcState.hh"
 #include "mem/ruby/slicc_interface/Message.hh"
@@ -48,6 +49,7 @@
 
 class MessageBuffer;
 class flitBuffer;
+class GarnetNetwork;
 
 class NetworkInterface : public ClockedObject, public Consumer
 {

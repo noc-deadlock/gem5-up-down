@@ -48,8 +48,9 @@ class RoutingUnit
   public:
     RoutingUnit(Router *router);
     int outportCompute(RouteInfo route,
-                      int inport,
-                      PortDirection inport_dirn);
+                      int vc, int inport,
+                      PortDirection inport_dirn,
+                      bool check_upDn_port);
 
     // Topology-agnostic Routing Table based routing (default)
     void addRoute(const NetDest& routing_table_entry);
@@ -71,6 +72,10 @@ class RoutingUnit
     int outportComputeCustom(RouteInfo route,
                              int inport,
                              PortDirection inport_dirn);
+    int upDnRouting(RouteInfo route,
+                             int inport,
+                             PortDirection inport_dirn,
+                             bool check_upDn_port);
 
   private:
     Router *m_router;

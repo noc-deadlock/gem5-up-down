@@ -1,0 +1,86 @@
+diff --git a/src/mem/ruby/network/Network.hh b/src/mem/ruby/network/Network.hh
+index 7f5ed2a..508bb8a 100644
+--- a/src/mem/ruby/network/Network.hh
++++ b/src/mem/ruby/network/Network.hh
+@@ -114,7 +114,9 @@ class Network : public ClockedObject
+      * accesses to work correctly.
+      */
+     virtual bool functionalRead(Packet *pkt)
+-    { fatal("Functional read not implemented.\n"); }
++    {
++        fatal("Functional read not implemented.\n");
++    }
+     virtual uint32_t functionalWrite(Packet *pkt)
+     { fatal("Functional write not implemented.\n"); }
+ 
+diff --git a/src/mem/ruby/network/garnet2.0/GarnetNetwork.cc b/src/mem/ruby/network/garnet2.0/GarnetNetwork.cc
+index 5fa7644..c0a6e62 100644
+--- a/src/mem/ruby/network/garnet2.0/GarnetNetwork.cc
++++ b/src/mem/ruby/network/garnet2.0/GarnetNetwork.cc
+@@ -439,6 +439,24 @@ GarnetNetworkParams::create()
+     return new GarnetNetwork(this);
+ }
+ 
++/*
++ * The Garnet Network has an array of routers. These routers have buffers
++ * that need to be accessed for functional reads and writes. Also the links
++ * between different routers have buffers that need to be accessed.
++*/
++bool
++GarnetNetwork::functionalRead(Packet * pkt)
++{
++    for(unsigned int i = 0; i < m_routers.size(); i++) {
++        if (m_routers[i]->functionalRead(pkt)) {
++            return true;
++        }
++    }
++
++    return false;
++
++}
++
+ uint32_t
+ GarnetNetwork::functionalWrite(Packet *pkt)
+ {
+diff --git a/src/mem/ruby/network/garnet2.0/GarnetNetwork.hh b/src/mem/ruby/network/garnet2.0/GarnetNetwork.hh
+index d8cbb08..3d94f27 100644
+--- a/src/mem/ruby/network/garnet2.0/GarnetNetwork.hh
++++ b/src/mem/ruby/network/garnet2.0/GarnetNetwork.hh
+@@ -97,6 +97,7 @@ class GarnetNetwork : public Network
+                           PortDirection src_outport_dirn,
+                           PortDirection dest_inport_dirn);
+ 
++    bool functionalRead(Packet * pkt);
+     //! Function for performing a functional write. The return value
+     //! indicates the number of messages that were written.
+     uint32_t functionalWrite(Packet *pkt);
+diff --git a/src/mem/ruby/network/garnet2.0/Router.cc b/src/mem/ruby/network/garnet2.0/Router.cc
+index 7266f99..c753dd0 100644
+--- a/src/mem/ruby/network/garnet2.0/Router.cc
++++ b/src/mem/ruby/network/garnet2.0/Router.cc
+@@ -187,6 +187,12 @@ Router::getPortDirectionName(PortDirection direction)
+     return direction;
+ }
+ 
++bool
++Router::functionalRead(Packet *pkt)
++{
++    return false;
++}
++
+ void
+ Router::regStats()
+ {
+diff --git a/src/mem/ruby/network/garnet2.0/Router.hh b/src/mem/ruby/network/garnet2.0/Router.hh
+index fa118b4..6b4e7c1 100644
+--- a/src/mem/ruby/network/garnet2.0/Router.hh
++++ b/src/mem/ruby/network/garnet2.0/Router.hh
+@@ -114,6 +114,7 @@ class Router : public BasicRouter, public Consumer
+                                                       aggregate_fault_prob);
+     }
+ 
++    bool functionalRead(Packet *);
+     uint32_t functionalWrite(Packet *);
+ 
+   private:
+

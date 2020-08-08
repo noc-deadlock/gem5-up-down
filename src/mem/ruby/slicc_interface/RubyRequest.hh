@@ -48,6 +48,7 @@ class RubyRequest : public Message
     Addr m_PhysicalAddress;
     Addr m_LineAddress;
     RubyRequestType m_Type;
+    RubyRequestType m_PrimaryType;
     Addr m_ProgramCounter;
     RubyAccessMode m_AccessMode;
     int m_Size;
@@ -61,7 +62,6 @@ class RubyRequest : public Message
     HSAScope m_scope;
     HSASegment m_segment;
 
-
     RubyRequest(Tick curTime, uint64_t _paddr, uint8_t* _data, int _len,
         uint64_t _pc, RubyRequestType _type, RubyAccessMode _access_mode,
         PacketPtr _pkt, PrefetchBit _pb = PrefetchBit_No,
@@ -71,6 +71,29 @@ class RubyRequest : public Message
         : Message(curTime),
           m_PhysicalAddress(_paddr),
           m_Type(_type),
+          m_ProgramCounter(_pc),
+          m_AccessMode(_access_mode),
+          m_Size(_len),
+          m_Prefetch(_pb),
+          data(_data),
+          m_pkt(_pkt),
+          m_contextId(_core_id),
+          m_scope(_scope),
+          m_segment(_segment)
+    {
+        m_LineAddress = makeLineAddress(m_PhysicalAddress);
+    }
+
+    RubyRequest(Tick curTime, uint64_t _paddr, uint8_t* _data, int _len,
+        uint64_t _pc, RubyRequestType _type, RubyRequestType _ptype,
+        RubyAccessMode _access_mode, PacketPtr _pkt,
+        PrefetchBit _pb = PrefetchBit_No, ContextID _proc_id = 100,
+        ContextID _core_id = 99, HSAScope _scope = HSAScope_UNSPECIFIED,
+        HSASegment _segment = HSASegment_GLOBAL)
+        : Message(curTime),
+          m_PhysicalAddress(_paddr),
+          m_Type(_type),
+          m_PrimaryType(_ptype),
           m_ProgramCounter(_pc),
           m_AccessMode(_access_mode),
           m_Size(_len),

@@ -43,7 +43,10 @@
 #include "mem/ruby/network/garnet2.0/NetworkLink.hh"
 #include "mem/ruby/network/garnet2.0/OutVcState.hh"
 #include "mem/ruby/network/garnet2.0/Router.hh"
+#include "mem/ruby/network/garnet2.0/RoutingUnit.hh"
+#include "mem/ruby/network/garnet2.0/InputUnit.hh"
 #include "mem/ruby/network/garnet2.0/flitBuffer.hh"
+
 
 class OutputUnit : public Consumer
 {
@@ -58,8 +61,10 @@ class OutputUnit : public Consumer
     void decrement_credit(int out_vc);
     void increment_credit(int out_vc);
     bool has_credit(int out_vc);
-    bool has_free_vc(int vnet);
-    int select_free_vc(int vnet);
+    int getNumFreeVCs(int vnet);
+    bool has_free_vc(int vnet, int invc, flit* t_flit, int inport);
+    int select_free_vc(int vnet, int invc,
+                            flit* t_flit, int inport);
 
     inline PortDirection get_direction() { return m_direction; }
 
@@ -95,6 +100,7 @@ class OutputUnit : public Consumer
     }
 
     uint32_t functionalWrite(Packet *pkt);
+    std::vector<OutVcState *> m_outvc_state; // vc state of downstream router
 
   private:
     int m_id;
@@ -106,7 +112,6 @@ class OutputUnit : public Consumer
     CreditLink *m_credit_link;
 
     flitBuffer *m_out_buffer; // This is for the network link to consume
-    std::vector<OutVcState *> m_outvc_state; // vc state of downstream router
 
 };
 

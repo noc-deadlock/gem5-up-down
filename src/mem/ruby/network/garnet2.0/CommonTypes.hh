@@ -37,6 +37,8 @@
 #include "mem/ruby/common/NetDest.hh"
 
 // All common enums and typedefs go here
+#define DEBUG_PRINT 0
+#define _unused(x) ((void)(x))
 
 enum flit_type {HEAD_, BODY_, TAIL_, HEAD_TAIL_, NUM_FLIT_TYPE_};
 enum VC_state_type {IDLE_, VC_AB_, ACTIVE_, NUM_VC_STATE_TYPE_};
@@ -58,6 +60,9 @@ struct RouteInfo
     int dest_ni;
     int dest_router;
     int hops_traversed;
+    int hops_traversed_eVC;
+    int hops_traversed_nVC;
+    int new_src; // to implement up-dn escapeVC
 };
 
 #define INFINITE_ 10000

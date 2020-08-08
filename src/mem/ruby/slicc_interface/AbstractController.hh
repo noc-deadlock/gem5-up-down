@@ -104,7 +104,7 @@ class AbstractController : public MemObject, public Consumer
 
     //! These functions are used by ruby system to read/write the data blocks
     //! that exist with in the controller.
-    virtual void functionalRead(const Addr &addr, PacketPtr) = 0;
+    virtual bool functionalRead(const Addr &addr, PacketPtr) = 0;
     void functionalMemoryRead(PacketPtr);
     //! The return value indicates the number of messages written with the
     //! data from the packet.

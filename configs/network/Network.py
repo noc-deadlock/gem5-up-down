@@ -73,7 +73,32 @@ def define_options(parser):
     parser.add_option("--garnet-deadlock-threshold", action="store",
                       type="int", default=50000,
                       help="network-level deadlock threshold.")
-
+    parser.add_option("--warmup-cycles", action="store",
+                     type="int", default=1000,
+                     help="number of cycles before marked packets get injected\
+                     into the network")
+    parser.add_option("--marked-flits", action="store",
+                     type="int", default=100000,
+                     help="number of marked flits injected into the network\
+                     marked packets would be just /k where ther are k-flits\
+                     per packet")
+    parser.add_option("--marked-flt-per-node", action="store",
+                     type="int", default=1000,
+                     help="number of marked flit to be injected per node\
+                     total marked flit would then be marked-flit per node *\
+                     number of nodes in the network")
+    parser.add_option("--conf-file", type="string",
+                  default="16_nodes-connectivity_matrix_9-links_removed_4.txt",
+                  help="check configs/topologies for complete set")
+    parser.add_option("--up-dn", action="store", type="int", default=0,
+                  help="""if set 1 will enable up-dn routing present in the
+                  configuration file passed as the commandline argument""")
+    parser.add_option("--escape-vc", action="store", type="int", default=0,
+                  help="""if set 1 will enable up-dn routing present in the
+                  configuration file passed as the commandline argument only
+                  in escape VC, all other would be random""")
+    parser.add_option("--ni-inj", type="string", default="fcfs",
+                      help="'rr'|'fcfs'")
 
 def create_network(options, ruby):
 
@@ -107,6 +132,15 @@ def init_network(options, network, InterfaceClass):
         network.ni_flit_size = options.link_width_bits / 8
         network.routing_algorithm = options.routing_algorithm
         network.garnet_deadlock_threshold = options.garnet_deadlock_threshold
+        network.sim_type = options.sim_type
+        network.warmup_cycles = options.warmup_cycles
+        network.marked_flits = options.marked_flits
+        network.ni_inj = options.ni_inj
+
+    if options.network == "garnet2.0":
+        network.conf_file = options.conf_file
+        network.up_dn = options.up_dn
+        network.escape_vc = options.escape_vc
 
     if options.network == "simple":
         network.setup_buffers()

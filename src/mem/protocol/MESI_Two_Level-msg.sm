@@ -39,8 +39,10 @@ enumeration(CoherenceRequestType, desc="...") {
 
   WB_ACK,    desc="Writeback ack";
 
-  DMA_READ, desc="DMA Read";
+  DMA_READ,  desc="DMA Read";
   DMA_WRITE, desc="DMA Write";
+
+  UNLOCK,    desc="Unlock cache line";
 }
 
 // CoherenceResponseType

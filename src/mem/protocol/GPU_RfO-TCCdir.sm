@@ -300,9 +300,10 @@ machine(MachineType:TCCdir, "AMD read-for-ownership directory for TCC (aka GPU L
   void functionalRead(Addr addr, Packet *pkt) {
     TBE tbe := TBEs.lookup(addr);
     if(is_valid(tbe)) {
-      testAndRead(addr, tbe.DataBlk, pkt);
+      return testAndRead(addr, tbe.DataBlk, pkt);
     } else {
       functionalMemoryRead(pkt);
+      return true;
     }
   }
 

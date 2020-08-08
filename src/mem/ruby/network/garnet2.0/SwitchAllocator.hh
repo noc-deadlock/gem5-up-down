@@ -38,11 +38,13 @@
 #include <vector>
 
 #include "mem/ruby/common/Consumer.hh"
+#include "mem/ruby/network/garnet2.0/flit.hh"
 #include "mem/ruby/network/garnet2.0/CommonTypes.hh"
 
 class Router;
 class InputUnit;
 class OutputUnit;
+class flit;
 
 class SwitchAllocator : public Consumer
 {
@@ -56,8 +58,10 @@ class SwitchAllocator : public Consumer
     void print(std::ostream& out) const {};
     void arbitrate_inports();
     void arbitrate_outports();
-    bool send_allowed(int inport, int invc, int outport, int outvc);
-    int vc_allocate(int outport, int inport, int invc);
+    bool send_allowed(int inport, int invc, int outport,
+                        int outvc, flit *t_flit);
+    int vc_allocate(int outport, int inport, int invc,
+                        flit *t_flit);
 
     inline double
     get_input_arbiter_activity()

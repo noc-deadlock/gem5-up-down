@@ -72,6 +72,8 @@ class GarnetSyntheticTraffic : public MemObject
      * debugging).
      */
     void printAddr(Addr a);
+    inline int
+        get_sim_type() { return sim_type;}
 
   protected:
     EventFunctionWrapper tickEvent;
@@ -123,6 +125,7 @@ class GarnetSyntheticTraffic : public MemObject
     int numPacketsSent;
     int singleSender;
     int singleDest;
+    int sim_type;
 
     std::string trafficType; // string
     TrafficType traffic; // enum from string

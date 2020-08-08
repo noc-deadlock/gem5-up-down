@@ -54,7 +54,9 @@ Router::Router(const Params *p)
     m_virtual_networks = p->virt_nets;
     m_vc_per_vnet = p->vcs_per_vnet;
     m_num_vcs = m_virtual_networks * m_vc_per_vnet;
-
+	mrkd_flt_ = p->marked_flit;
+    // cout << "marked-flit per router is: " << mrkd_flt_ << endl;
+    // assert(0);
     m_routing_unit = new RoutingUnit(this);
     m_sw_alloc = new SwitchAllocator(this);
     m_switch = new CrossbarSwitch(this);
@@ -79,12 +81,16 @@ Router::init()
 
     m_sw_alloc->init();
     m_switch->init();
+    // mrkd_flt_ = 1000;
 }
 
 void
 Router::wakeup()
 {
     DPRINTF(RubyNetwork, "Router %d woke up\n", m_id);
+
+//    if(curCycle() > 1000)
+//        assert(0);
 
     // check for incoming flits
     for (int inport = 0; inport < m_input_unit.size(); inport++) {
@@ -159,9 +165,10 @@ Router::getInportDirection(int inport)
 }
 
 int
-Router::route_compute(RouteInfo route, int inport, PortDirection inport_dirn)
+Router::route_compute(RouteInfo route, int vc, int inport, PortDirection inport_dirn,
+                            bool check_upDn_port)
 {
-    return m_routing_unit->outportCompute(route, inport, inport_dirn);
+    return m_routing_unit->outportCompute(route, vc, inport, inport_dirn, check_upDn_port);
 }
 
 void
@@ -185,6 +192,12 @@ Router::getPortDirectionName(PortDirection direction)
     // statement to convert direction to a string
     // that can be printed out
     return direction;
+}
+
+bool
+Router::functionalRead(Packet *pkt)
+{
+    return false;
 }
 
 void

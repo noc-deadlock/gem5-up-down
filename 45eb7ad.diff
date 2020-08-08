@@ -1,0 +1,88 @@
+From 45eb7ad915831cbfb45f8841ad96e88ab5b7a6d7 Mon Sep 17 00:00:00 2001
+From: Tuan Ta <qtt2@cornell.edu>
+Date: Fri, 06 Apr 2018 10:42:03 -0400
+Subject: [PATCH] ruby: support atomic memory requests in Sequencer
+
+This patch adds support to execute atomic memory (AMO) requests in Sequencer.
+AMO operations are applied to L1 cache blocks right after L1 receives data. Old
+data are written back to the memory packet and returned to CPU.
+
+Change-Id: Iec8a0e8d60f12fc2b4d33db910233f3f90adc3be
+---
+
+diff --git a/src/mem/protocol/MI_example-cache.sm b/src/mem/protocol/MI_example-cache.sm
+index b8036c1..34ea3f0 100644
+--- a/src/mem/protocol/MI_example-cache.sm
++++ b/src/mem/protocol/MI_example-cache.sm
+@@ -122,7 +122,10 @@
+       return Event:Load;
+     } else if (type == RubyRequestType:IFETCH) {
+       return Event:Ifetch;
+-    } else if ((type == RubyRequestType:ST) || (type == RubyRequestType:ATOMIC)) {
++    } else if ((type == RubyRequestType:ST) ||
++               (type == RubyRequestType:ATOMIC) ||
++               (type == RubyRequestType:ATOMIC_NO_RETURN) ||
++               (type == RubyRequestType:ATOMIC_RETURN)) {
+       return Event:Store;
+     } else {
+       error("Invalid RubyRequestType");
+diff --git a/src/mem/ruby/system/Sequencer.cc b/src/mem/ruby/system/Sequencer.cc
+index 41ec6ea..a884981 100644
+--- a/src/mem/ruby/system/Sequencer.cc
++++ b/src/mem/ruby/system/Sequencer.cc
+@@ -197,7 +197,10 @@
+         (request_type == RubyRequestType_Store_Conditional) ||
+         (request_type == RubyRequestType_Locked_RMW_Read) ||
+         (request_type == RubyRequestType_Locked_RMW_Write) ||
+-        (request_type == RubyRequestType_FLUSH)) {
++        (request_type == RubyRequestType_FLUSH) ||
++        (request_type == RubyRequestType_ATOMIC) ||
++        (request_type == RubyRequestType_ATOMIC_RETURN) ||
++        (request_type == RubyRequestType_ATOMIC_NO_RETURN)) {
+ 
+         // Check if there is any outstanding read request for the same
+         // cache line.
+@@ -376,6 +379,8 @@
+ 
+     assert((request->m_type == RubyRequestType_ST) ||
+            (request->m_type == RubyRequestType_ATOMIC) ||
++           (request->m_type == RubyRequestType_ATOMIC_RETURN) ||
++           (request->m_type == RubyRequestType_ATOMIC_NO_RETURN) ||
+            (request->m_type == RubyRequestType_RMW_Read) ||
+            (request->m_type == RubyRequestType_RMW_Write) ||
+            (request->m_type == RubyRequestType_Load_Linked) ||
+@@ -487,6 +492,25 @@
+             data.setData(&overwrite_val[0],
+                          getOffset(request_address), pkt->getSize());
+             DPRINTF(RubySequencer, "swap data %s\n", data);
++        } else if (pkt->isAtomicOp()) {
++            std::vector<uint8_t> overwrite_val(pkt->getSize());
++
++            // copy cache data into overwrite_val
++            memcpy(&overwrite_val[0],
++                   data.getData(getOffset(request_address), pkt->getSize()),
++                   pkt->getSize());
++
++            // execute AMO operation on overwrite_val
++            (*(pkt->getAtomicOp()))(&overwrite_val[0]);
++
++            // return cache data to the packet
++            pkt->setData(data.getData(getOffset(request_address),
++                         pkt->getSize()));
++
++            // update the cache data to overwrite_val
++            data.setData(&overwrite_val[0],
++                         getOffset(request_address), pkt->getSize());
++            DPRINTF(RubySequencer, "amo set data %s\n", data);
+         } else if (type != RubyRequestType_Store_Conditional || llscSuccess) {
+             // Types of stores set the actual data here, apart from
+             // failed Store Conditional requests
+@@ -603,6 +627,8 @@
+                     primary_type = secondary_type = RubyRequestType_LD;
+                 }
+             }
++        } else if (pkt->cmd == MemCmd::SwapReq && pkt->isAtomicOp()) {
++            primary_type = secondary_type = RubyRequestType_ATOMIC_RETURN;
+         } else if (pkt->isFlush()) {
+           primary_type = secondary_type = RubyRequestType_FLUSH;
+         } else {

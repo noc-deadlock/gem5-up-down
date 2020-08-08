@@ -35,7 +35,7 @@
 
 // Constructor for the flit
 flit::flit(int id, int  vc, int vnet, RouteInfo route, int size,
-    MsgPtr msg_ptr, Cycles curTime)
+    MsgPtr msg_ptr, Cycles curTime, bool marked)
 {
     m_size = size;
     m_msg_ptr = msg_ptr;
@@ -48,6 +48,17 @@ flit::flit(int id, int  vc, int vnet, RouteInfo route, int size,
     m_route = route;
     m_stage.first = I_;
     m_stage.second = m_time;
+    m_marked = marked;
+    m_injection_vc = vc;
+
+    #if DEBUG_PRINT
+    path_info.clear();
+    // initialize the hop_info here
+    // Inport for "Local" is always '0'
+    // flit always gets injected via 'Local' inport
+    hop_info info(vc, 0, std::string("Local"), route.src_router);
+    path_info.push_back(info);
+    #endif
 
     if (size == 1) {
         m_type = HEAD_TAIL_;
@@ -72,10 +83,44 @@ flit::print(std::ostream& out) const
     out << "VC=" << m_vc << " ";
     out << "Src NI=" << m_route.src_ni << " ";
     out << "Src Router=" << m_route.src_router << " ";
+    out << "New Src Router=" << m_route.new_src << " ";
     out << "Dest NI=" << m_route.dest_ni << " ";
     out << "Dest Router=" << m_route.dest_router << " ";
     out << "Enqueue Time=" << m_enqueue_time << " ";
+    out << "Outport=" << m_outport << " ";
+    out << "curr_vc=" << m_vc << " ";
+    out << "marked=" << m_marked << " ";
     out << "]";
+}
+
+void
+flit::print_upDn_path()
+{
+    for(int i=0; i < upDn_path.size(); i++) {
+
+        std::cout << upDn_path.at(i) << "->";
+    }
+    std::cout << std::endl;
+}
+
+void
+flit::up_dn_assert()
+{
+    if(upDn_path.size() > 0) {
+        for(int curr_ = 0, nxt_ = curr_ + 1;
+            nxt_ < upDn_path.size(); curr_++, nxt_++) {
+            if(upDn_path.size() == 1)
+                continue;
+            if(upDn_path.size() > 1) {
+                if(upDn_path.at(curr_) == 'd' &&
+                    upDn_path.at(nxt_) == 'u') {
+                    std::cout << "voilation of up-dn routing!" << std::endl;
+                    assert(0);
+                }
+            }
+        }
+    }
+
 }
 
 bool

@@ -197,7 +197,10 @@ Sequencer::insertRequest(PacketPtr pkt, RubyRequestType request_type)
         (request_type == RubyRequestType_Store_Conditional) ||
         (request_type == RubyRequestType_Locked_RMW_Read) ||
         (request_type == RubyRequestType_Locked_RMW_Write) ||
-        (request_type == RubyRequestType_FLUSH)) {
+        (request_type == RubyRequestType_FLUSH) ||
+        (request_type == RubyRequestType_ATOMIC) ||
+        (request_type == RubyRequestType_ATOMIC_RETURN) ||
+        (request_type == RubyRequestType_ATOMIC_NO_RETURN)) {
 
         // Check if there is any outstanding read request for the same
         // cache line.
@@ -376,6 +379,8 @@ Sequencer::writeCallback(Addr address, DataBlock& data,
 
     assert((request->m_type == RubyRequestType_ST) ||
            (request->m_type == RubyRequestType_ATOMIC) ||
+           (request->m_type == RubyRequestType_ATOMIC_RETURN) ||
+           (request->m_type == RubyRequestType_ATOMIC_NO_RETURN) ||
            (request->m_type == RubyRequestType_RMW_Read) ||
            (request->m_type == RubyRequestType_RMW_Write) ||
            (request->m_type == RubyRequestType_Load_Linked) ||
@@ -487,6 +492,25 @@ Sequencer::hitCallback(SequencerRequest* srequest, DataBlock& data,
             data.setData(&overwrite_val[0],
                          getOffset(request_address), pkt->getSize());
             DPRINTF(RubySequencer, "swap data %s\n", data);
+        } else if (pkt->isAtomicOp()) {
+            std::vector<uint8_t> overwrite_val(pkt->getSize());
+
+            // copy cache data into overwrite_val
+            memcpy(&overwrite_val[0],
+                   data.getData(getOffset(request_address), pkt->getSize()),
+                   pkt->getSize());
+
+            // execute AMO operation on overwrite_val
+            (*(pkt->getAtomicOp()))(&overwrite_val[0]);
+
+            // return cache data to the packet
+            pkt->setData(data.getData(getOffset(request_address),
+                         pkt->getSize()));
+
+            // update the cache data to overwrite_val
+            data.setData(&overwrite_val[0],
+                         getOffset(request_address), pkt->getSize());
+            DPRINTF(RubySequencer, "amo set data %s\n", data);
         } else if (type != RubyRequestType_Store_Conditional || llscSuccess) {
             // Types of stores set the actual data here, apart from
             // failed Store Conditional requests
@@ -603,6 +627,8 @@ Sequencer::makeRequest(PacketPtr pkt)
                     primary_type = secondary_type = RubyRequestType_LD;
                 }
             }
+        } else if (pkt->cmd == MemCmd::SwapReq && pkt->isAtomicOp()) {
+            primary_type = secondary_type = RubyRequestType_ATOMIC_RETURN;
         } else if (pkt->isFlush()) {
           primary_type = secondary_type = RubyRequestType_FLUSH;
         } else {
@@ -614,14 +640,15 @@ Sequencer::makeRequest(PacketPtr pkt)
     if (status != RequestStatus_Ready)
         return status;
 
-    issueRequest(pkt, secondary_type);
+    issueRequest(pkt, secondary_type, primary_type);
 
     // TODO: issue hardware prefetches here
     return RequestStatus_Issued;
 }
 
 void
-Sequencer::issueRequest(PacketPtr pkt, RubyRequestType secondary_type)
+Sequencer::issueRequest(PacketPtr pkt, RubyRequestType secondary_type,
+                        RubyRequestType primary_type)
 {
     assert(pkt != NULL);
     ContextID proc_id = pkt->req->hasContextId() ?
@@ -642,8 +669,8 @@ Sequencer::issueRequest(PacketPtr pkt, RubyRequestType secondary_type)
                                       pkt->isFlush() ?
                                       nullptr : pkt->getPtr<uint8_t>(),
                                       pkt->getSize(), pc, secondary_type,
-                                      RubyAccessMode_Supervisor, pkt,
-                                      PrefetchBit_No, proc_id, core_id);
+                                      primary_type, RubyAccessMode_Supervisor,
+                                      pkt, PrefetchBit_No, proc_id, core_id);
 
     DPRINTFR(ProtocolTrace, "%15s %3s %10s%20s %6s>%-6s %#x %s\n",
             curTick(), m_version, "Seq", "Begin", "", "",

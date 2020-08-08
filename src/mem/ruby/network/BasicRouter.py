@@ -28,8 +28,7 @@
 #          Brad Beckmann
 
 from m5.params import *
-
-from m5.objects.ClockedObject import ClockedObject
+from ClockedObject import ClockedObject
 
 class BasicRouter(ClockedObject):
     type = 'BasicRouter'
@@ -38,3 +37,4 @@ class BasicRouter(ClockedObject):
 
     # only used by garnet
     latency   = Param.Cycles(1, "number of cycles inside router")
+    marked_flit = Param.Int("marked flit used by the router")

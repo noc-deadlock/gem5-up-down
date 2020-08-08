@@ -120,6 +120,9 @@ def get_processes(options):
 parser = optparse.OptionParser()
 Options.addCommonOptions(parser)
 Options.addSEOptions(parser)
+parser.add_option("--sim-type", type="int", default=1,
+                  help="to run the garnet simulation in default mode\
+                  or run it in warm-up -- cool-down mode.")
 
 if '--ruby' in sys.argv:
     Ruby.define_options(parser)

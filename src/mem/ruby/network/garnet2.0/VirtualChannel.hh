@@ -89,6 +89,10 @@ class VirtualChannel
 
     uint32_t functionalWrite(Packet *pkt);
 
+    bool isEmpty() {
+        return (m_input_buffer->isEmpty());
+    }
+
   private:
     int m_id;
     flitBuffer *m_input_buffer;

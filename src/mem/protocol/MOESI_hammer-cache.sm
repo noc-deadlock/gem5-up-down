@@ -205,16 +205,17 @@ machine(MachineType:L1Cache, "AMD Hammer-like protocol")
     return L1Icache_entry;
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     Entry cache_entry := getCacheEntry(addr);
     if(is_valid(cache_entry)) {
-      testAndRead(addr, cache_entry.DataBlk, pkt);
+      return testAndRead(addr, cache_entry.DataBlk, pkt);
     } else {
       TBE tbe := TBEs[addr];
       if(is_valid(tbe)) {
-        testAndRead(addr, tbe.DataBlk, pkt);
+        return testAndRead(addr, tbe.DataBlk, pkt);
       } else {
         error("Missing data block");
+        false;
       }
     }
   }

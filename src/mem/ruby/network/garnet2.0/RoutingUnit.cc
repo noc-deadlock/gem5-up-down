@@ -34,10 +34,12 @@
 #include "mem/ruby/network/garnet2.0/RoutingUnit.hh"
 
 #include "base/cast.hh"
-#include "base/logging.hh"
 #include "mem/ruby/network/garnet2.0/InputUnit.hh"
 #include "mem/ruby/network/garnet2.0/Router.hh"
+#include "mem/ruby/network/garnet2.0/OutputUnit.hh"
 #include "mem/ruby/slicc_interface/Message.hh"
+
+using namespace std;
 
 RoutingUnit::RoutingUnit(Router *router)
 {
@@ -106,10 +108,40 @@ RoutingUnit::lookupRoutingTable(int vnet, NetDest msg_destination)
         exit(0);
     }
 
+    // go to output unit pointed by each outport of the router and
+    // print out the OutVC state of each of those outport VC
+    int outport_id;
+    std::vector<int>outport_credit_index; // keep the total credit count
+                                        // at the outport-id index
+    int accum_;
+    for(int i = 0; i < output_link_candidates.size(); i++) {
+
+        outport_id = output_link_candidates[i];
+
+        accum_ = 0;
+
+        // get credit count for each outvc
+        accum_ += m_router->get_outputUnit_ref()[outport_id]\
+                    ->getNumFreeVCs(vnet);
+        outport_credit_index.push_back(accum_);
+    }
+
+    // now you have populated the vector, find the max entry
+    int max = -1;
+    int candidate = -1;
+    for(int i = 0; i < outport_credit_index.size(); i++ ) {
+        if(outport_credit_index[i] > max) {
+            max = outport_credit_index[i];
+            candidate = i;
+        }
+    }
+
+
     // Randomly select any candidate output link
-    int candidate = 0;
-    if (!(m_router->get_net_ptr())->isVNetOrdered(vnet))
-        candidate = rand() % num_candidates;
+//    int candidate = 0;
+//    if (!(m_router->get_net_ptr())->isVNetOrdered(vnet))
+//        candidate = rand() % num_candidates;
+
 
     output_link = output_link_candidates.at(candidate);
     return output_link;
@@ -137,8 +169,8 @@ RoutingUnit::addOutDirection(PortDirection outport_dirn, int outport_idx)
 // table is provided here.
 
 int
-RoutingUnit::outportCompute(RouteInfo route, int inport,
-                            PortDirection inport_dirn)
+RoutingUnit::outportCompute(RouteInfo route, int vc, int inport,
+                            PortDirection inport_dirn, bool check_upDn_port)
 {
     int outport = -1;
 
@@ -156,21 +188,114 @@ RoutingUnit::outportCompute(RouteInfo route, int inport,
     RoutingAlgorithm routing_algorithm =
         (RoutingAlgorithm) m_router->get_net_ptr()->getRoutingAlgorithm();
 
-    switch (routing_algorithm) {
-        case TABLE_:  outport =
-            lookupRoutingTable(route.vnet, route.net_dest); break;
-        case XY_:     outport =
-            outportComputeXY(route, inport, inport_dirn); break;
-        // any custom algorithm
-        case CUSTOM_: outport =
-            outportComputeCustom(route, inport, inport_dirn); break;
-        default: outport =
-            lookupRoutingTable(route.vnet, route.net_dest); break;
+    if((m_router->get_net_ptr()->up_dn == 0) &&
+        (m_router->get_net_ptr()->escape_vc == 0)) {
+        switch (routing_algorithm) {
+            case TABLE_:  outport =
+                lookupRoutingTable(route.vnet, route.net_dest); break;
+            case XY_:     outport =
+                outportComputeXY(route, inport, inport_dirn); break;
+            // any custom algorithm
+            case CUSTOM_: outport =
+                outportComputeCustom(route, inport, inport_dirn); break;
+            default: outport =
+                lookupRoutingTable(route.vnet, route.net_dest); break;
+        }
+    }
+    else if((m_router->get_net_ptr()->up_dn == 1) &&
+            ((m_router->get_net_ptr()->escape_vc == 0))) {
+            // irrespective of VC all packets will get the
+            // outport with up-dn routing
+        outport = upDnRouting(route, inport, inport_dirn, check_upDn_port);
+    }
+    else if((m_router->get_net_ptr()->up_dn == 1) &&
+            ((m_router->get_net_ptr()->escape_vc == 1))) {
+        // if vc is base_vc compute outport using upDnRoutin
+        // else use lookupRoutingTable
+        int vc_base = route.vnet*m_router->m_vc_per_vnet;
+        int escapeVC = vc_base + (m_router->m_vc_per_vnet - 1);
+        if(vc == escapeVC || check_upDn_port) {
+            outport = upDnRouting(route, inport, inport_dirn, check_upDn_port);
+        }
+        else {
+            // TODO: Randomly compute outport..
+            outport = lookupRoutingTable(route.vnet, route.net_dest);
+            // int outport_updn = upDnRouting(route, inport, inport_dirn);
+        }
+    }
+    else
+    {
+        std::cout << "invalid value of 'up_dn' aborting" << std::endl;
+        assert(0);
     }
 
     assert(outport != -1);
+
     return outport;
 }
+
+int
+RoutingUnit::upDnRouting(RouteInfo route,
+                    int inport,
+                    PortDirection inport_dirn,
+                    bool check_upDn_port)
+{
+    PortDirection outport_dirn = "Unknown";
+    // index the table based on this router-id
+    // the desitnation router-id that packet
+    // wants to leave. From routingTable
+    // know the direction.[]
+    // Do not use curr_id; instead use
+    // the src-router id of the packet to
+    // index the into the routing table.
+
+    if(check_upDn_port == true)
+        assert(route.new_src == -1);
+
+    /***********************************/
+    // this will be caller-router's id.
+    int curr_id = m_router->get_id();
+    int src_id;
+    int dest_id = route.dest_router;
+    /***********************************/
+    if(check_upDn_port == true) {
+         src_id = curr_id;
+    } else {
+        if(route.new_src == -1)
+            src_id = route.src_router;
+        else
+            src_id = route.new_src;
+    }
+
+    if(curr_id == src_id) { // this means that it's the beginning
+
+        // need to look first entry, that's why [0] index
+        outport_dirn = m_router->get_net_ptr()->\
+            routingTable[src_id][dest_id][0].direction_;
+
+    } else {
+        for(int indx= 0; indx < m_router->get_net_ptr()->\
+            routingTable[src_id][dest_id].size(); indx++) {
+            // cout << "src_id: " << src_id << " dest_id: " << dest_id << endl;
+            if(m_router->get_net_ptr()->\
+                routingTable[src_id][dest_id][indx].\
+                next_router_id == curr_id) {
+                outport_dirn = m_router->get_net_ptr()->\
+                    routingTable[src_id][dest_id][indx+1].direction_;
+                break;
+            }
+        }
+    }
+
+    assert(outport_dirn != "Unknown");
+//    cout << "current_router: " << m_router->get_id() << endl;
+//    cout << "outport_dirn: " << outport_dirn << endl;
+//    cout << "m_outports_dirn2idx[outport_dirn]: " <<
+//        m_outports_dirn2idx[outport_dirn] << endl;
+    return m_outports_dirn2idx[outport_dirn];
+}
+
+
 
 // XY routing implemented using port directions
 // Only for reference purpose in a Mesh
@@ -225,7 +350,7 @@ RoutingUnit::outportComputeXY(RouteInfo route,
         // x_hops == 0 and y_hops == 0
         // this is not possible
         // already checked that in outportCompute() function
-        panic("x_hops == y_hops == 0");
+        assert(0);
     }
 
     return m_outports_dirn2idx[outport_dirn];
@@ -238,5 +363,6 @@ RoutingUnit::outportComputeCustom(RouteInfo route,
                                  int inport,
                                  PortDirection inport_dirn)
 {
-    panic("%s placeholder executed", __FUNCTION__);
+    assert(0);
+    return -1;
 }

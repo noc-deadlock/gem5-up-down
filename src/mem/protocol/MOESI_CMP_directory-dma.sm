@@ -94,8 +94,9 @@ machine(MachineType:DMA, "DMA Controller")
   void setAccessPermission(Addr addr, State state) {
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     error("DMA does not support functional read.");
+    return false;
   }
 
   int functionalWrite(Addr addr, Packet *pkt) {

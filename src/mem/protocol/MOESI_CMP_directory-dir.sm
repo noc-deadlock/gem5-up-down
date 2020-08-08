@@ -193,8 +193,9 @@ machine(MachineType:Directory, "Directory protocol")
     }
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     functionalMemoryRead(pkt);
+    return true;
   }
 
   int functionalWrite(Addr addr, Packet *pkt) {

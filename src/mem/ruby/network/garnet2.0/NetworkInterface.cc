@@ -143,26 +143,69 @@ void
 NetworkInterface::incrementStats(flit *t_flit)
 {
     int vnet = t_flit->get_vnet();
+    if(m_net_ptr->sim_type == 2) {
 
-    // Latency
-    m_net_ptr->increment_received_flits(vnet);
-    Cycles network_delay =
-        t_flit->get_dequeue_time() - t_flit->get_enqueue_time() - Cycles(1);
-    Cycles src_queueing_delay = t_flit->get_src_delay();
-    Cycles dest_queueing_delay = (curCycle() - t_flit->get_dequeue_time());
-    Cycles queueing_delay = src_queueing_delay + dest_queueing_delay;
+        // Latency
+        m_net_ptr->increment_received_flits(vnet, t_flit->m_marked);
+        Cycles network_delay =
+            t_flit->get_dequeue_time() - t_flit->get_enqueue_time() - Cycles(1);
+        Cycles src_queueing_delay = t_flit->get_src_delay();
+        Cycles dest_queueing_delay = (curCycle() - t_flit->get_dequeue_time());
+        Cycles queueing_delay = src_queueing_delay + dest_queueing_delay;
+        Cycles total_delay = queueing_delay + network_delay;
 
-    m_net_ptr->increment_flit_network_latency(network_delay, vnet);
-    m_net_ptr->increment_flit_queueing_latency(queueing_delay, vnet);
+        m_net_ptr->increment_flit_network_latency(network_delay, vnet, t_flit->m_marked);
+        m_net_ptr->increment_flit_queueing_latency(queueing_delay, vnet, t_flit->m_marked);
+        m_net_ptr->update_flit_latency_histogram(total_delay, vnet, t_flit->m_marked);
+        m_net_ptr->update_flit_network_latency_histogram(network_delay, vnet, t_flit->m_marked);
+        m_net_ptr->update_flit_queueing_latency_histogram(queueing_delay, vnet, t_flit->m_marked);
+        if(curCycle() > (Cycles)m_net_ptr->warmup_cycles) {
+            m_net_ptr->check_network_saturation();
+        }
 
-    if (t_flit->get_type() == TAIL_ || t_flit->get_type() == HEAD_TAIL_) {
-        m_net_ptr->increment_received_packets(vnet);
-        m_net_ptr->increment_packet_network_latency(network_delay, vnet);
-        m_net_ptr->increment_packet_queueing_latency(queueing_delay, vnet);
+        if (t_flit->get_type() == TAIL_ || t_flit->get_type() == HEAD_TAIL_) {
+            m_net_ptr->increment_received_packets(vnet, t_flit->m_marked);
+            m_net_ptr->increment_packet_network_latency(network_delay, vnet,
+                                                        t_flit->m_marked);
+            m_net_ptr->increment_packet_queueing_latency(queueing_delay, vnet,
+                                                        t_flit->m_marked);
+        }
+
+        // Hops
+        m_net_ptr->increment_total_hops(t_flit->get_route().hops_traversed, t_flit->m_marked);
+        m_net_ptr->increment_total_eVC_hops(t_flit->get_route().hops_traversed_eVC);
+        m_net_ptr->increment_total_nVC_hops(t_flit->get_route().hops_traversed_nVC);
+
+    }else {
+        assert(m_net_ptr->sim_type == 1);
+        // Latency
+        m_net_ptr->increment_received_flits(vnet, t_flit->m_marked);
+        Cycles network_delay =
+            t_flit->get_dequeue_time() - t_flit->get_enqueue_time() - Cycles(1);
+        Cycles src_queueing_delay = t_flit->get_src_delay();
+        Cycles dest_queueing_delay = (curCycle() - t_flit->get_dequeue_time());
+        Cycles queueing_delay = src_queueing_delay + dest_queueing_delay;
+        Cycles total_delay = queueing_delay + network_delay;
+
+        m_net_ptr->increment_flit_network_latency(network_delay, vnet, t_flit->m_marked);
+        m_net_ptr->increment_flit_queueing_latency(queueing_delay, vnet, t_flit->m_marked);
+        m_net_ptr->update_flit_latency_histogram(total_delay, vnet, t_flit->m_marked);
+        m_net_ptr->update_flit_network_latency_histogram(network_delay, vnet, t_flit->m_marked);
+        m_net_ptr->update_flit_queueing_latency_histogram(queueing_delay, vnet, t_flit->m_marked);
+
+        if (t_flit->get_type() == TAIL_ || t_flit->get_type() == HEAD_TAIL_) {
+            m_net_ptr->increment_received_packets(vnet, t_flit->m_marked);
+            m_net_ptr->increment_packet_network_latency(network_delay, vnet,
+                                                        t_flit->m_marked);
+            m_net_ptr->increment_packet_queueing_latency(queueing_delay, vnet,
+                                                        t_flit->m_marked);
+        }
+
+        // Hops
+        m_net_ptr->increment_total_hops(t_flit->get_route().hops_traversed, t_flit->m_marked);
+        m_net_ptr->increment_total_eVC_hops(t_flit->get_route().hops_traversed_eVC);
+        m_net_ptr->increment_total_nVC_hops(t_flit->get_route().hops_traversed_nVC);
     }
-
-    // Hops
-    m_net_ptr->increment_total_hops(t_flit->get_route().hops_traversed);
 }
 
 /*
@@ -194,6 +237,8 @@ NetworkInterface::wakeup()
 
         if (b->isReady(curTime)) { // Is there a message waiting
             msg_ptr = b->peekMsgPtr();
+            // mparasar: below function increment the stats of
+            // GarnetNetwork
             if (flitisizeMessage(msg_ptr, vnet)) {
                 b->dequeue(curTime);
             }
@@ -341,7 +386,9 @@ NetworkInterface::flitisizeMessage(MsgPtr msg_ptr, int vnet)
     for (int ctr = 0; ctr < dest_nodes.size(); ctr++) {
 
         // this will return a free output virtual channel
-        int vc = calculateVC(vnet);
+        // int vc = calculateVC(vnet);
+		// HACK
+        int vc = calculateVC(0 /*vnet*/);
 
         if (vc == -1) {
             return false ;
@@ -384,15 +431,40 @@ NetworkInterface::flitisizeMessage(MsgPtr msg_ptr, int vnet)
         // initialize hops_traversed to -1
         // so that the first router increments it to 0
         route.hops_traversed = -1;
+        route.hops_traversed_eVC = 0;
+        route.hops_traversed_nVC = 0;
+        // intialize 'new_src' to -1. this is populated
+        // once flit/packet enters the escapeVC and then
+        // should not be changed afterwordsz
+        route.new_src = -1;
 
-        m_net_ptr->increment_injected_packets(vnet);
+
         for (int i = 0; i < num_flits; i++) {
-            m_net_ptr->increment_injected_flits(vnet);
-            flit *fl = new flit(i, vc, vnet, route, num_flits, new_msg_ptr,
-                curCycle());
-
+            flit *fl;
+            if (m_net_ptr->sim_type == 2) {
+                // put condition here for each node to inject same number of
+                // marked packet using ceil() function
+                 if((curCycle() > (Cycles)m_net_ptr->warmup_cycles) &&
+                    // (m_net_ptr->marked_flt_injected < m_net_ptr->marked_flits) &&
+                    (m_net_ptr->m_routers.at(m_router_id)->mrkd_flt_ > 0)) {
+                        fl = new flit(i, vc, vnet, route, num_flits, new_msg_ptr,
+                                curCycle(), true);
+                        m_net_ptr->m_routers.at(m_router_id)->mrkd_flt_--;
+                 } else {
+                        fl = new flit(i, vc, vnet, route, num_flits, new_msg_ptr,
+                                      curCycle());
+                 }
+            } else {
+                fl = new flit(i, vc, vnet, route, num_flits, new_msg_ptr,
+                             curCycle());
+            }
+            m_net_ptr->increment_injected_flits(vnet, fl->m_marked, m_router_id);
             fl->set_src_delay(curCycle() - ticksToCycles(msg_ptr->getTime()));
             m_ni_out_vcs[vc]->insert(fl);
+            if(fl->get_type() == HEAD_TAIL_ ||
+                fl->get_type() == TAIL_) {
+                m_net_ptr->increment_injected_packets(vnet, fl->m_marked);
+            }
         }
 
         m_ni_out_vcs_enqueue_time[vc] = curCycle();
@@ -405,23 +477,41 @@ NetworkInterface::flitisizeMessage(MsgPtr msg_ptr, int vnet)
 int
 NetworkInterface::calculateVC(int vnet)
 {
-    for (int i = 0; i < m_vc_per_vnet; i++) {
-        int delta = m_vc_allocator[vnet];
-        m_vc_allocator[vnet]++;
-        if (m_vc_allocator[vnet] == m_vc_per_vnet)
-            m_vc_allocator[vnet] = 0;
 
-        if (m_out_vc_state[(vnet*m_vc_per_vnet) + delta]->isInState(
-                    IDLE_, curCycle())) {
-            vc_busy_counter[vnet] = 0;
-            return ((vnet*m_vc_per_vnet) + delta);
+    if(m_net_ptr->ni_inj == "rr") {
+        for (int i = 0; i < m_vc_per_vnet; i++) {
+            int delta = m_vc_allocator[vnet];
+            m_vc_allocator[vnet]++;
+            if (m_vc_allocator[vnet] == m_vc_per_vnet)
+                m_vc_allocator[vnet] = 0;
+
+            if (m_out_vc_state[(vnet*m_vc_per_vnet) + delta]->isInState(
+                        IDLE_, curCycle())) {
+                vc_busy_counter[vnet] = 0;
+                return ((vnet*m_vc_per_vnet) + delta);
+            }
         }
     }
+    else if (m_net_ptr->ni_inj == "fcfs") {
+        for(int vc_ = 0; vc_ < m_vc_per_vnet; vc_++) {
+            // Always start checking from 'vc = 0'
+            if (m_out_vc_state[(vnet*m_vc_per_vnet) + vc_]->isInState(
+                        IDLE_, curCycle())) {
+                vc_busy_counter[vnet] = 0;
+                return ((vnet*m_vc_per_vnet) + vc_);
+            }
 
+        }
+    }
+    else {
+        std::cout << "wrong injection manner option 'ni_inj' "\
+                    << std::endl;
+        assert(0);
+    }
     vc_busy_counter[vnet] += 1;
-    panic_if(vc_busy_counter[vnet] > m_deadlock_threshold,
+    /*panic_if(vc_busy_counter[vnet] > m_deadlock_threshold,
         "%s: Possible network deadlock in vnet: %d at time: %llu \n",
-        name(), vnet, curTick());
+        name(), vnet, curTick());*/
 
     return -1;
 }
@@ -437,6 +527,9 @@ void
 NetworkInterface::scheduleOutputLink()
 {
     int vc = m_vc_round_robin;
+    m_vc_round_robin++;
+    if (m_vc_round_robin == m_num_vcs)
+        m_vc_round_robin = 0;
 
     for (int i = 0; i < m_num_vcs; i++) {
         vc++;
@@ -466,8 +559,6 @@ NetworkInterface::scheduleOutputLink()
             }
             if (!is_candidate_vc)
                 continue;
-
-            m_vc_round_robin = vc;
 
             m_out_vc_state[vc]->decrement_credit();
             // Just removing the flit

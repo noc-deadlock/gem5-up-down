@@ -149,7 +149,8 @@ class Sequencer : public RubyPort
     { return m_IncompleteTimes[t]; }
 
   private:
-    void issueRequest(PacketPtr pkt, RubyRequestType type);
+    void issueRequest(PacketPtr pkt, RubyRequestType secondary_type,
+                      RubyRequestType primary_type);
 
     void hitCallback(SequencerRequest* request, DataBlock& data,
                      bool llscSuccess,

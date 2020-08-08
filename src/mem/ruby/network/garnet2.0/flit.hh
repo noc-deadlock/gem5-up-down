@@ -41,12 +41,14 @@
 #include "mem/ruby/network/garnet2.0/CommonTypes.hh"
 #include "mem/ruby/slicc_interface/Message.hh"
 
+typedef std::string PortDirection;
+using namespace std;
 class flit
 {
   public:
     flit() {}
     flit(int id, int vc, int vnet, RouteInfo route, int size,
-         MsgPtr msg_ptr, Cycles curTime);
+         MsgPtr msg_ptr, Cycles curTime, bool marked = false);
 
     int get_outport() {return m_outport; }
     int get_size() { return m_size; }
@@ -56,7 +58,9 @@ class flit
     Cycles get_time() { return m_time; }
     int get_vnet() { return m_vnet; }
     int get_vc() { return m_vc; }
+    int get_injection_vc() { return m_injection_vc; }
     RouteInfo get_route() { return m_route; }
+    RouteInfo& get_route_ref() { return m_route; }
     MsgPtr& get_msg_ptr() { return m_msg_ptr; }
     flit_type get_type() { return m_type; }
     std::pair<flit_stage, Cycles> get_stage() { return m_stage; }
@@ -70,7 +74,27 @@ class flit
     void set_dequeue_time(Cycles time) { m_dequeue_time = time; }
 
     void increment_hops() { m_route.hops_traversed++; }
+    void increment_eVC_hops() {
+        m_route.hops_traversed_eVC++;
+        /*cout << "m_route.hops_traversed_nVC: " << m_route.hops_traversed_nVC << endl;
+        cout << "m_route.hops_traversed_eVC: " << m_route.hops_traversed_eVC << endl;
+        cout << "m_route.hops_traversed: " << m_route.hops_traversed << endl;
+        assert(m_route.hops_traversed == (m_route.hops_traversed_eVC +
+                    m_route.hops_traversed_nVC));*/
+    }
+    void increment_nVC_hops() {
+        m_route.hops_traversed_nVC++;
+        /*cout << "m_route.hops_traversed_nVC: " << m_route.hops_traversed_nVC << endl;
+        cout << "m_route.hops_traversed_eVC: " << m_route.hops_traversed_eVC << endl;
+        cout << "m_route.hops_traversed: " << m_route.hops_traversed << endl;
+        assert(m_route.hops_traversed == (m_route.hops_traversed_eVC +
+                    m_route.hops_traversed_nVC));*/
+
+    }
     void print(std::ostream& out) const;
+
+    void up_dn_assert();
+    void print_upDn_path();
 
     bool
     is_stage(flit_stage stage, Cycles time)
@@ -98,11 +122,68 @@ class flit
     }
 
     bool functionalWrite(Packet *pkt);
+    #if DEBUG_PRINT
+    void push_back_info_(int vc_id_, int inport_, PortDirection inport_dirn_,
+                int router_id_) {
+        info_.vc_id = vc_id_;
+        info_.inport = inport_;
+        info_.inport_dirn = inport_dirn_;
+        info_.router_id = router_id_;
+        path_info.push_back(info_);
+    }
+    void print_path_info() {
+        for(int k = 0; k < path_info.size(); k++) {
+            cout << "{ vc:" << path_info.at(k).vc_id <<" inport: " << \
+                path_info.at(k).inport << " inport_direction: " << \
+                path_info.at(k).inport_dirn << " router-id: " << \
+                path_info.at(k).router_id << " }";
+            cout.flush();
+            if( k < path_info.size() - 1)
+                cout << " ---> ";
+            cout.flush();
+        }
+        return;
+    }
+    #endif
 
+    bool m_marked;
+
+    std::vector<char> upDn_path;
+    #if DEBUG_PRINT
+    struct hop_info {
+
+        int vc_id;
+        int inport;
+        PortDirection inport_dirn;
+        int router_id;
+
+        // default ctor
+        hop_info() :
+                vc_id(-1),
+                inport(-1),
+                inport_dirn("Unknown"),
+                router_id(-1)
+        {}
+        // Ctor
+        hop_info(int vc_id_, int inport_,
+                PortDirection inport_dirn_,
+                int router_id_) :
+                    vc_id(vc_id_),
+                    inport(inport_),
+                    inport_dirn(std::move(inport_dirn_)),
+                    router_id(router_id_)
+        {}
+    };
+
+    hop_info info_;
+
+    std::vector< hop_info > path_info;
+    #endif
   protected:
     int m_id;
     int m_vnet;
     int m_vc;
+    int m_injection_vc;
     RouteInfo m_route;
     int m_size;
     Cycles m_enqueue_time, m_dequeue_time, m_time;

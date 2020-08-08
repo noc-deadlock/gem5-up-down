@@ -1,0 +1,767 @@
+From 0d935fe65121a8e8caff9cbaceb59111895dee47 Mon Sep 17 00:00:00 2001
+From: Moyang Wang <mw828@cornell.edu>
+Date: Fri, 13 Apr 2018 19:20:14 -0400
+Subject: [PATCH] mem-ruby,protocol: support functionalRead in Ruby
+
+This patch supports functionalRead used by syscalls (e.g., clone, futex, etc.)
+in SE mode for Ruby. It consists of the following changes:
+
+(1) return boolean from functionalRead of Ruby controllers
+
+Change the return type of functionalRead() functions of controllers
+from void to boolean.
+
+(2) update all SLICC files to return bool from functionalRead
+
+(3) handle some cases where RubySystem functionalRead() fails
+
+Previously functionalRead() of the RubySystem searches all controllers
+that have read access permission (Read_Write or Read_Only). In some
+cases, none of the controllers has read permission. For example, the
+controller that previously owned the data has received a data request
+and has forward the data to the requestor. In those cases, we need to
+do functional read on the network as well. If the network does not
+have the data either, it may be the case that the network has not
+received the data message yet. We need to search all controllers that
+may still hold a copy of the data although they no longer own the
+data.
+
+Change-Id: Icd2755b8a2ace6d08c05261095d818861686bde3
+---
+
+diff --git a/src/mem/protocol/GPU_RfO-SQC.sm b/src/mem/protocol/GPU_RfO-SQC.sm
+index c286426..28692dc 100644
+--- a/src/mem/protocol/GPU_RfO-SQC.sm
++++ b/src/mem/protocol/GPU_RfO-SQC.sm
+@@ -174,12 +174,13 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/GPU_RfO-TCC.sm b/src/mem/protocol/GPU_RfO-TCC.sm
+index ca110e5..70a46df 100644
+--- a/src/mem/protocol/GPU_RfO-TCC.sm
++++ b/src/mem/protocol/GPU_RfO-TCC.sm
+@@ -212,12 +212,13 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/GPU_RfO-TCCdir.sm b/src/mem/protocol/GPU_RfO-TCCdir.sm
+index a524381..2dafb6a 100644
+--- a/src/mem/protocol/GPU_RfO-TCCdir.sm
++++ b/src/mem/protocol/GPU_RfO-TCCdir.sm
+@@ -300,9 +300,10 @@
+   void functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/GPU_RfO-TCP.sm b/src/mem/protocol/GPU_RfO-TCP.sm
+index 0c83f55..a995859 100644
+--- a/src/mem/protocol/GPU_RfO-TCP.sm
++++ b/src/mem/protocol/GPU_RfO-TCP.sm
+@@ -203,12 +203,13 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/GPU_VIPER-SQC.sm b/src/mem/protocol/GPU_VIPER-SQC.sm
+index 1885a68..c06e072 100644
+--- a/src/mem/protocol/GPU_VIPER-SQC.sm
++++ b/src/mem/protocol/GPU_VIPER-SQC.sm
+@@ -137,12 +137,13 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/GPU_VIPER-TCC.sm b/src/mem/protocol/GPU_VIPER-TCC.sm
+index f8da4ab..7148385 100644
+--- a/src/mem/protocol/GPU_VIPER-TCC.sm
++++ b/src/mem/protocol/GPU_VIPER-TCC.sm
+@@ -162,12 +162,13 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/GPU_VIPER-TCP.sm b/src/mem/protocol/GPU_VIPER-TCP.sm
+index 9dffe0f..ef624ee 100644
+--- a/src/mem/protocol/GPU_VIPER-TCP.sm
++++ b/src/mem/protocol/GPU_VIPER-TCP.sm
+@@ -164,12 +164,13 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/GPU_VIPER_Region-TCC.sm b/src/mem/protocol/GPU_VIPER_Region-TCC.sm
+index 04d7b7a..6a7c697 100644
+--- a/src/mem/protocol/GPU_VIPER_Region-TCC.sm
++++ b/src/mem/protocol/GPU_VIPER_Region-TCC.sm
+@@ -173,12 +173,13 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/Garnet_standalone-cache.sm b/src/mem/protocol/Garnet_standalone-cache.sm
+index a34c767..bac6761 100644
+--- a/src/mem/protocol/Garnet_standalone-cache.sm
++++ b/src/mem/protocol/Garnet_standalone-cache.sm
+@@ -115,8 +115,9 @@
+     return OOD;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     error("Garnet_standalone does not support functional read.");
++    return false;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/Garnet_standalone-dir.sm b/src/mem/protocol/Garnet_standalone-dir.sm
+index 3a43279..a1a4bf7 100644
+--- a/src/mem/protocol/Garnet_standalone-dir.sm
++++ b/src/mem/protocol/Garnet_standalone-dir.sm
+@@ -78,8 +78,9 @@
+   void setAccessPermission(Addr addr, State state) {
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     error("Garnet_standalone does not support functional read.");
++    return false;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MESI_Three_Level-L1cache.sm b/src/mem/protocol/MESI_Three_Level-L1cache.sm
+index 6db35ce..41d97ce 100644
+--- a/src/mem/protocol/MESI_Three_Level-L1cache.sm
++++ b/src/mem/protocol/MESI_Three_Level-L1cache.sm
+@@ -205,12 +205,12 @@
+     return AccessPermission:NotPresent;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs[addr];
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+-      testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
++      return testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MESI_Two_Level-L1cache.sm b/src/mem/protocol/MESI_Two_Level-L1cache.sm
+index 57eeef6..3621ffe 100644
+--- a/src/mem/protocol/MESI_Two_Level-L1cache.sm
++++ b/src/mem/protocol/MESI_Two_Level-L1cache.sm
+@@ -240,12 +240,12 @@
+     return AccessPermission:NotPresent;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs[addr];
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+-      testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
++      return testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MESI_Two_Level-L2cache.sm b/src/mem/protocol/MESI_Two_Level-L2cache.sm
+index 5a8cfae..9dda9de 100644
+--- a/src/mem/protocol/MESI_Two_Level-L2cache.sm
++++ b/src/mem/protocol/MESI_Two_Level-L2cache.sm
+@@ -217,12 +217,12 @@
+     return AccessPermission:NotPresent;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs[addr];
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+-      testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
++      return testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MESI_Two_Level-dir.sm b/src/mem/protocol/MESI_Two_Level-dir.sm
+index 991de5a..5452ad6 100644
+--- a/src/mem/protocol/MESI_Two_Level-dir.sm
++++ b/src/mem/protocol/MESI_Two_Level-dir.sm
+@@ -153,12 +153,13 @@
+     return AccessPermission:NotPresent;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs[addr];
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MESI_Two_Level-dma.sm b/src/mem/protocol/MESI_Two_Level-dma.sm
+index 5d0b885..cfd6253 100644
+--- a/src/mem/protocol/MESI_Two_Level-dma.sm
++++ b/src/mem/protocol/MESI_Two_Level-dma.sm
+@@ -92,8 +92,9 @@
+   void setAccessPermission(Addr addr, State state) {
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     error("DMA does not support functional read.");
++    return false;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MI_example-cache.sm b/src/mem/protocol/MI_example-cache.sm
+index 34ea3f0..89a229a 100644
+--- a/src/mem/protocol/MI_example-cache.sm
++++ b/src/mem/protocol/MI_example-cache.sm
+@@ -176,12 +176,12 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs[addr];
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+-      testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
++      return testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MI_example-dir.sm b/src/mem/protocol/MI_example-dir.sm
+index e9f6521..810cba3 100644
+--- a/src/mem/protocol/MI_example-dir.sm
++++ b/src/mem/protocol/MI_example-dir.sm
+@@ -177,12 +177,13 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs[addr];
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MI_example-dma.sm b/src/mem/protocol/MI_example-dma.sm
+index 85d0b7f..5091f79 100644
+--- a/src/mem/protocol/MI_example-dma.sm
++++ b/src/mem/protocol/MI_example-dma.sm
+@@ -92,8 +92,9 @@
+   void setAccessPermission(Addr addr, State state) {
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     error("DMA does not support functional read.");
++    return false;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MOESI_AMD_Base-CorePair.sm b/src/mem/protocol/MOESI_AMD_Base-CorePair.sm
+index e1504de..eb85849 100644
+--- a/src/mem/protocol/MOESI_AMD_Base-CorePair.sm
++++ b/src/mem/protocol/MOESI_AMD_Base-CorePair.sm
+@@ -321,12 +321,13 @@
+     return AccessPermission:NotPresent;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MOESI_AMD_Base-L3cache.sm b/src/mem/protocol/MOESI_AMD_Base-L3cache.sm
+index 620e9ed..cc08ea1 100644
+--- a/src/mem/protocol/MOESI_AMD_Base-L3cache.sm
++++ b/src/mem/protocol/MOESI_AMD_Base-L3cache.sm
+@@ -192,12 +192,13 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MOESI_AMD_Base-Region-CorePair.sm b/src/mem/protocol/MOESI_AMD_Base-Region-CorePair.sm
+index 5c08c6b..3f20f55 100644
+--- a/src/mem/protocol/MOESI_AMD_Base-Region-CorePair.sm
++++ b/src/mem/protocol/MOESI_AMD_Base-Region-CorePair.sm
+@@ -329,12 +329,13 @@
+     return AccessPermission:NotPresent;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MOESI_AMD_Base-Region-dir.sm b/src/mem/protocol/MOESI_AMD_Base-Region-dir.sm
+index cc5ceb0..62a8f0e 100644
+--- a/src/mem/protocol/MOESI_AMD_Base-Region-dir.sm
++++ b/src/mem/protocol/MOESI_AMD_Base-Region-dir.sm
+@@ -258,12 +258,13 @@
+     return AccessPermission:NotPresent;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MOESI_AMD_Base-RegionBuffer.sm b/src/mem/protocol/MOESI_AMD_Base-RegionBuffer.sm
+index 0ec87f0..14e5fbd 100644
+--- a/src/mem/protocol/MOESI_AMD_Base-RegionBuffer.sm
++++ b/src/mem/protocol/MOESI_AMD_Base-RegionBuffer.sm
+@@ -311,8 +311,9 @@
+     return AccessPermission:NotPresent;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     functionalMemoryRead(pkt);
++    return true;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MOESI_AMD_Base-RegionDir.sm b/src/mem/protocol/MOESI_AMD_Base-RegionDir.sm
+index f0bb31c..dc421b6 100644
+--- a/src/mem/protocol/MOESI_AMD_Base-RegionDir.sm
++++ b/src/mem/protocol/MOESI_AMD_Base-RegionDir.sm
+@@ -291,8 +291,9 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     functionalMemoryRead(pkt);
++    return true;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MOESI_AMD_Base-dir.sm b/src/mem/protocol/MOESI_AMD_Base-dir.sm
+index 4cde5ad..cb98ecd 100644
+--- a/src/mem/protocol/MOESI_AMD_Base-dir.sm
++++ b/src/mem/protocol/MOESI_AMD_Base-dir.sm
+@@ -200,12 +200,13 @@
+     getDirectoryEntry(addr).DirectoryState := state;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MOESI_AMD_Base-probeFilter.sm b/src/mem/protocol/MOESI_AMD_Base-probeFilter.sm
+index d23094a..3e10be5 100644
+--- a/src/mem/protocol/MOESI_AMD_Base-probeFilter.sm
++++ b/src/mem/protocol/MOESI_AMD_Base-probeFilter.sm
+@@ -241,12 +241,13 @@
+     getDirectoryEntry(addr).DirectoryState := state;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs.lookup(addr);
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MOESI_CMP_directory-L1cache.sm b/src/mem/protocol/MOESI_CMP_directory-L1cache.sm
+index 0d48e21..b301492 100644
+--- a/src/mem/protocol/MOESI_CMP_directory-L1cache.sm
++++ b/src/mem/protocol/MOESI_CMP_directory-L1cache.sm
+@@ -216,16 +216,17 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     Entry cache_entry := getCacheEntry(addr);
+     if(is_valid(cache_entry)) {
+-      testAndRead(addr, cache_entry.DataBlk, pkt);
++      return testAndRead(addr, cache_entry.DataBlk, pkt);
+     } else {
+       TBE tbe := TBEs[addr];
+       if(is_valid(tbe)) {
+-        testAndRead(addr, tbe.DataBlk, pkt);
++        return testAndRead(addr, tbe.DataBlk, pkt);
+       } else {
+         error("Data block missing!");
++        return false;
+       }
+     }
+   }
+diff --git a/src/mem/protocol/MOESI_CMP_directory-L2cache.sm b/src/mem/protocol/MOESI_CMP_directory-L2cache.sm
+index 0c00bd9..d36d98e 100644
+--- a/src/mem/protocol/MOESI_CMP_directory-L2cache.sm
++++ b/src/mem/protocol/MOESI_CMP_directory-L2cache.sm
+@@ -545,12 +545,12 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs[addr];
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+-      testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
++      return testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MOESI_CMP_directory-dir.sm b/src/mem/protocol/MOESI_CMP_directory-dir.sm
+index 9b73a2b..87411ab 100644
+--- a/src/mem/protocol/MOESI_CMP_directory-dir.sm
++++ b/src/mem/protocol/MOESI_CMP_directory-dir.sm
+@@ -193,8 +193,9 @@
+     }
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     functionalMemoryRead(pkt);
++    return true;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MOESI_CMP_directory-dma.sm b/src/mem/protocol/MOESI_CMP_directory-dma.sm
+index f3f9167..b8a0a9f 100644
+--- a/src/mem/protocol/MOESI_CMP_directory-dma.sm
++++ b/src/mem/protocol/MOESI_CMP_directory-dma.sm
+@@ -94,8 +94,9 @@
+   void setAccessPermission(Addr addr, State state) {
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     error("DMA does not support functional read.");
++    return false;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MOESI_CMP_token-L1cache.sm b/src/mem/protocol/MOESI_CMP_token-L1cache.sm
+index db06fb5..e770a49 100644
+--- a/src/mem/protocol/MOESI_CMP_token-L1cache.sm
++++ b/src/mem/protocol/MOESI_CMP_token-L1cache.sm
+@@ -241,8 +241,8 @@
+     return L1Icache_entry;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
+-    testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
++  bool functionalRead(Addr addr, Packet *pkt) {
++    return testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MOESI_CMP_token-L2cache.sm b/src/mem/protocol/MOESI_CMP_token-L2cache.sm
+index 7911179..c1ae4c3 100644
+--- a/src/mem/protocol/MOESI_CMP_token-L2cache.sm
++++ b/src/mem/protocol/MOESI_CMP_token-L2cache.sm
+@@ -163,8 +163,8 @@
+     return localDirectory.lookup(address);
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
+-    testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
++  bool functionalRead(Addr addr, Packet *pkt) {
++    return testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MOESI_CMP_token-dir.sm b/src/mem/protocol/MOESI_CMP_token-dir.sm
+index b9b65b5..7145684 100644
+--- a/src/mem/protocol/MOESI_CMP_token-dir.sm
++++ b/src/mem/protocol/MOESI_CMP_token-dir.sm
+@@ -249,12 +249,13 @@
+     persistentTable.markEntries(addr);
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs[addr];
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      return true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MOESI_CMP_token-dma.sm b/src/mem/protocol/MOESI_CMP_token-dma.sm
+index e48b871..5004975 100644
+--- a/src/mem/protocol/MOESI_CMP_token-dma.sm
++++ b/src/mem/protocol/MOESI_CMP_token-dma.sm
+@@ -94,8 +94,9 @@
+   void setAccessPermission(Addr addr, State state) {
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     error("DMA does not support functional read.");
++    return false;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/protocol/MOESI_hammer-cache.sm b/src/mem/protocol/MOESI_hammer-cache.sm
+index 9cbd277..2e7dde8 100644
+--- a/src/mem/protocol/MOESI_hammer-cache.sm
++++ b/src/mem/protocol/MOESI_hammer-cache.sm
+@@ -205,16 +205,17 @@
+     return L1Icache_entry;
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     Entry cache_entry := getCacheEntry(addr);
+     if(is_valid(cache_entry)) {
+-      testAndRead(addr, cache_entry.DataBlk, pkt);
++      return testAndRead(addr, cache_entry.DataBlk, pkt);
+     } else {
+       TBE tbe := TBEs[addr];
+       if(is_valid(tbe)) {
+-        testAndRead(addr, tbe.DataBlk, pkt);
++        return testAndRead(addr, tbe.DataBlk, pkt);
+       } else {
+         error("Missing data block");
++        false;
+       }
+     }
+   }
+diff --git a/src/mem/protocol/MOESI_hammer-dir.sm b/src/mem/protocol/MOESI_hammer-dir.sm
+index 42522c7..14e5462 100644
+--- a/src/mem/protocol/MOESI_hammer-dir.sm
++++ b/src/mem/protocol/MOESI_hammer-dir.sm
+@@ -270,12 +270,13 @@
+     getDirectoryEntry(addr).changePermission(Directory_State_to_permission(state));
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     TBE tbe := TBEs[addr];
+     if(is_valid(tbe)) {
+-      testAndRead(addr, tbe.DataBlk, pkt);
++      return testAndRead(addr, tbe.DataBlk, pkt);
+     } else {
+       functionalMemoryRead(pkt);
++      true;
+     }
+   }
+ 
+diff --git a/src/mem/protocol/MOESI_hammer-dma.sm b/src/mem/protocol/MOESI_hammer-dma.sm
+index 6a4c5ac..12a010b 100644
+--- a/src/mem/protocol/MOESI_hammer-dma.sm
++++ b/src/mem/protocol/MOESI_hammer-dma.sm
+@@ -92,8 +92,9 @@
+   void setAccessPermission(Addr addr, State state) {
+   }
+ 
+-  void functionalRead(Addr addr, Packet *pkt) {
++  bool functionalRead(Addr addr, Packet *pkt) {
+     error("DMA does not support functional read.");
++    return false;
+   }
+ 
+   int functionalWrite(Addr addr, Packet *pkt) {
+diff --git a/src/mem/ruby/slicc_interface/AbstractController.hh b/src/mem/ruby/slicc_interface/AbstractController.hh
+index 35cd3d2..bcbf459 100644
+--- a/src/mem/ruby/slicc_interface/AbstractController.hh
++++ b/src/mem/ruby/slicc_interface/AbstractController.hh
+@@ -104,7 +104,7 @@
+ 
+     //! These functions are used by ruby system to read/write the data blocks
+     //! that exist with in the controller.
+-    virtual void functionalRead(const Addr &addr, PacketPtr) = 0;
++    virtual bool functionalRead(const Addr &addr, PacketPtr) = 0;
+     void functionalMemoryRead(PacketPtr);
+     //! The return value indicates the number of messages written with the
+     //! data from the packet.
+diff --git a/src/mem/ruby/system/RubySystem.cc b/src/mem/ruby/system/RubySystem.cc
+index 3d0470c..4e96c4d 100644
+--- a/src/mem/ruby/system/RubySystem.cc
++++ b/src/mem/ruby/system/RubySystem.cc
+@@ -469,6 +469,32 @@
+                 return true;
+             }
+         }
++    } else {
++        // None of the controller has read access of the data. This may
++        // be because of all controllers are in transient states so that
++        // their access permissions are busy. We check if the data is in
++        // the network
++        DPRINTF(RubySystem, "num_busy = %d, num_ro = %d, num_rw = %d\n",
++                num_busy, num_ro, num_rw);
++        DPRINTF(RubySystem, "read from the network.\n");
++        if (m_network->functionalRead(pkt))
++          return true;
++
++        // The network does not have the data either. This could be the
++        // case that the controller that previously owned the data has
++        // received a data request and has forward the data to the
++        // requestor (e.g. a cache controller received a Fwd_GETX request
++        // and has sent the data and has transitioned to I
++        // state). However, the message containing the data has not been
++        // put in the network yet. In this case we simply search all
++        // controllers that may still hold a copy of the data although
++        // they no longer own the data.
++        DPRINTF(RubySystem, "Network does not have the data either\n");
++
++        for (unsigned int i = 0;i < num_controllers;++i) {
++            if (m_abs_cntrl_vec[i]->functionalRead(line_address, pkt))
++                return true;
++        }
+     }
+ 
+     return false;

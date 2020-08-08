@@ -26,7 +26,7 @@
 #
 # Authors: Tushar Krishna
 
-from m5.objects.MemObject import MemObject
+from MemObject import MemObject
 from m5.params import *
 from m5.proxy import *
 
@@ -55,3 +55,4 @@ class GarnetSyntheticTraffic(MemObject):
                                             due to lack of progress")
     test = MasterPort("Port to the memory system to test")
     system = Param.System(Parent.any, "System we belong to")
+    sim_type = Param.Int(1, "type of simulation done in garnet")

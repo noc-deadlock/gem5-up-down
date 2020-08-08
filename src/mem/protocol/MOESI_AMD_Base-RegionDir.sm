@@ -291,8 +291,9 @@ machine(MachineType:RegionDir, "Region Directory for AMD_Base-like protocol")
     }
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     functionalMemoryRead(pkt);
+    return true;
   }
 
   int functionalWrite(Addr addr, Packet *pkt) {

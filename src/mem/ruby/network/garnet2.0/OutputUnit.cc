@@ -62,6 +62,19 @@ OutputUnit::~OutputUnit()
     deletePointers(m_outvc_state);
 }
 
+int
+OutputUnit::getNumFreeVCs(int vnet)
+{
+    int freeVC = 0;
+    int vc_base = vnet*m_vc_per_vnet;
+    for (int vc = vc_base; vc < vc_base + m_vc_per_vnet; vc++) {
+        if (is_vc_idle(vc, m_router->curCycle()))
+            freeVC++;
+    }
+    return freeVC;
+
+}
+
 void
 OutputUnit::decrement_credit(int out_vc)
 {
@@ -95,29 +108,253 @@ OutputUnit::has_credit(int out_vc)
 
 // Check if the output port (i.e., input port at next router) has free VCs.
 bool
-OutputUnit::has_free_vc(int vnet)
+OutputUnit::has_free_vc(int vnet, int invc, flit* t_flit, int inport)
 {
+    // cout << "OutputUnit::has_free_vc()" << endl;
+    // Do this only when escapeVC is set
     int vc_base = vnet*m_vc_per_vnet;
-    for (int vc = vc_base; vc < vc_base + m_vc_per_vnet; vc++) {
-        if (is_vc_idle(vc, m_router->curCycle()))
-            return true;
+    int escapeVC = vc_base + (m_vc_per_vnet - 1);
+
+    bool illegal_turn = false;
+    char prev_turn;
+    if(t_flit->upDn_path.size() > 1)
+        prev_turn = t_flit->upDn_path.back();
+    else
+        prev_turn = ' ';
+    #if DEBUG_PRINT
+        t_flit->print_upDn_path();
+    #endif
+    // this assert is only true when --up-dn=1
+    // and --escape-vc=0 in the commandline option
+    // OR, vc-per-vnet=1
+    if ((m_router->get_net_ptr()->up_dn == 1 &&
+        m_router->get_net_ptr()->escape_vc == 0) ||
+        (m_vc_per_vnet == 1))
+        t_flit->up_dn_assert();
+
+    int nxt = -1;
+    int curr = m_router->get_id();
+    if(prev_turn == 'd') {
+        // check the requested turn.
+        if(m_direction == "North") {
+            nxt = curr + m_router->get_net_ptr()->\
+                            getNumRows();
+        } else if(m_direction == "South") {
+            nxt = curr - m_router->get_net_ptr()->\
+                            getNumRows();
+        } else if(m_direction == "East") {
+            nxt = curr + 1;
+        } else if(m_direction == "West") {
+            nxt = curr - 1;
+        } else if(m_direction == "Local") {
+            // do nothing here
+        } else {
+            // illegal port direction.
+            assert(0);
+        }
     }
 
+#if DEBUG_PRINT
+    cout << "curr: " << curr << "next_router: " << next_router << endl;
+#endif
+    if(nxt != -1) {
+        char next_turn = m_router->get_net_ptr()->\
+                    get_direction(curr, nxt);
+#if DEBUG_PRINT
+        cout << "curr: " << curr << "nxt: " << nxt << endl;
+        cout << "next_turn: " << next_turn << endl;
+#endif
+        if(next_turn == 'u')
+            illegal_turn = true;
+        else
+            illegal_turn = false;
+    }
+    // this assert is only true when --up-dn=1
+    // and --escape-vc=0 in the commandline option
+    if ((m_router->get_net_ptr()->escape_vc == 0 &&
+        m_router->get_net_ptr()->up_dn == 1) ||
+        (m_vc_per_vnet == 1)) {
+        assert(illegal_turn == false);
+        _unused(illegal_turn); // make compilation happy!
+    }
+    if(m_router->get_net_ptr()->escape_vc == 1) {
+        if(invc == escapeVC) {
+            // can't use the assert here as flit might
+            // just injected into 'escapeVC' at source!
+            /*cout << "injection vc of t_flit: " <<t_flit->get_injection_vc() \
+                << " escapeVC: " << escapeVC << " t_flit->src: " \
+                << t_flit->get_route().src_router <<
+                "t_flit->new_src: "\
+                << t_flit->get_route().new_src <<endl;
+            cout << "t_flit: " << *t_flit << endl;*/
+            if( t_flit->get_injection_vc() != escapeVC )
+                assert(t_flit->get_route().new_src != -1);
+
+            if (is_vc_idle(invc, m_router->curCycle())) {
+                return true;
+            }
+        } else {
+            // it may happen that this router is not
+            // eligible for aquiring escapeVC.. so check upDn_routing for that..
+             // else, select from only 'regularVC'
+             // do it only for 'HEAD_' or 'HEAD_TAIL_' flit
+             if ((t_flit->get_type() == HEAD_) ||
+                (t_flit->get_type() == HEAD_TAIL_)) {
+                PortDirection inport_dirn = m_router->get_inputUnit_ref().at(inport)\
+                                                            ->get_direction();
+                int upDn_outport =
+                    m_router->get_routingUnit_ref()->outportCompute(t_flit->get_route(), invc,
+                                                                inport,
+                                                                inport_dirn, true);
+                if (upDn_outport == m_id) {
+                    for (int vc = vc_base; vc < vc_base + m_vc_per_vnet; vc++) {
+                        if (is_vc_idle(vc, m_router->curCycle())) {
+                            return true;
+                        }
+                    }
+                } else {
+                    for (int vc = vc_base; vc < escapeVC; vc++) {
+                        if (is_vc_idle(vc, m_router->curCycle())) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else {
+        for (int vc = vc_base; vc < vc_base + m_vc_per_vnet; vc++) {
+            if (is_vc_idle(vc, m_router->curCycle()))
+                return true;
+        }
+    }
+    // cout << "fall through.. returning -1" << endl;
     return false;
 }
 
 // Assign a free output VC to the winner of Switch Allocation
 int
-OutputUnit::select_free_vc(int vnet)
+OutputUnit::select_free_vc(int vnet, int invc,
+                                flit* t_flit, int inport)
 {
+    // cout << "OutputUnit::select_free_vc()" << endl;
+
     int vc_base = vnet*m_vc_per_vnet;
-    for (int vc = vc_base; vc < vc_base + m_vc_per_vnet; vc++) {
-        if (is_vc_idle(vc, m_router->curCycle())) {
-            m_outvc_state[vc]->setState(ACTIVE_, m_router->curCycle());
-            return vc;
+    int escapeVC = vc_base + (m_vc_per_vnet - 1);
+
+    bool illegal_turn = false;
+    char prev_turn;
+    if(t_flit->upDn_path.size() > 1)
+        prev_turn = t_flit->upDn_path.back();
+    else
+        prev_turn = ' ';
+
+    int next_router = -1;
+
+    int curr = m_router->get_id();
+    if(prev_turn == 'd') {
+        // check the requested turn.
+        if(m_direction == "North") {
+            next_router = curr + m_router->get_net_ptr()->\
+                            getNumRows();
+        } else if(m_direction == "South") {
+            next_router = curr - m_router->get_net_ptr()->\
+                            getNumRows();
+        } else if(m_direction == "East") {
+            next_router = curr + 1;
+        } else if(m_direction == "West") {
+            next_router = curr - 1;
+        } else if(m_direction == "Local") {
+            // do nothing here
+        } else {
+            // illegal port direction.
+            assert(0);
         }
     }
 
+#if DEBUG_PRINT
+    cout << "curr: " << curr << "next_router: " << next_router << endl;
+#endif
+
+    if(next_router != -1) {
+        char next_turn = m_router->get_net_ptr()->\
+                    get_direction(curr, next_router);
+#if DEBUG_PRINT
+        cout << "curr: " << curr << "next_router: " << next_router << endl;
+        cout << "next_turn: " << next_turn << endl;
+#endif
+        if(next_turn == 'u')
+            illegal_turn = true;
+        else
+            illegal_turn = false;
+    }
+    // this assert is only true when --up-dn=1
+    // and --escape-vc=0 in the commandline option
+    // OR, vc-per-vnet=1
+    if ((m_router->get_net_ptr()->escape_vc == 0 &&
+        m_router->get_net_ptr()->up_dn == 1) ||
+        (m_vc_per_vnet == 1)) {
+        assert(illegal_turn == false);
+        _unused(illegal_turn); // make compilation happy!
+    }
+    /*****Granting vc here*****/
+    if(m_router->get_net_ptr()->escape_vc == 1) {
+        if(invc == escapeVC) {
+            if( t_flit->get_injection_vc() != escapeVC )
+                assert(t_flit->get_route().new_src != -1);
+            if(is_vc_idle(invc, m_router->curCycle())) {
+                m_outvc_state[invc]->setState(ACTIVE_, m_router->curCycle());
+                return invc;
+            }
+        } else {
+             // Check if 'upDn-outport' is same as 'this-outport'
+             // if yes.. then select nextVC from 'regularVC' or
+             // 'escapeVC' and update the new_src router as this-router
+             // else, select from only 'regularVC'
+             // do it only for 'HEAD_' or 'HEAD_TAIL_' flit
+             if ((t_flit->get_type() == HEAD_) ||
+                (t_flit->get_type() == HEAD_TAIL_)) {
+                PortDirection inport_dirn = m_router->get_inputUnit_ref().at(inport)\
+                                                    ->get_direction();
+                int upDn_outport =
+                        m_router->get_routingUnit_ref()->outportCompute(t_flit->get_route(),
+                                                    invc, inport, inport_dirn, true);
+                if (upDn_outport == m_id) {
+                    for (int vc = vc_base; vc < vc_base + m_vc_per_vnet; vc++) {
+                        if (is_vc_idle(vc, m_router->curCycle())) {
+                            m_outvc_state[vc]->setState(ACTIVE_, m_router->curCycle());
+                            // if the VC is escapeVC then update the new src as
+                            // next router
+                            if (vc == escapeVC) {
+                                assert(t_flit->get_route().new_src == -1);
+                                // NOTE: new source should be this one router
+                                // initialize it here..
+                                // when this function is called flit is guarantteed
+                                // to win SA so it's safe here.
+                                t_flit->get_route_ref().new_src = m_router->get_id();
+                            }
+                            return vc;
+                        }
+                    }
+                } else {
+                    for (int vc = vc_base; vc < escapeVC; vc++) {
+                        if (is_vc_idle(vc, m_router->curCycle())) {
+                            m_outvc_state[vc]->setState(ACTIVE_, m_router->curCycle());
+                            return vc;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else {
+        for (int vc = vc_base; vc < vc_base + m_vc_per_vnet; vc++) {
+            if (is_vc_idle(vc, m_router->curCycle())) {
+                m_outvc_state[vc]->setState(ACTIVE_, m_router->curCycle());
+                return vc;
+            }
+        }
+    }
     return -1;
 }
 

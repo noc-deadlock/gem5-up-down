@@ -115,8 +115,9 @@ machine(MachineType:L1Cache, "Garnet_standalone L1 Cache")
     return OOD;
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     error("Garnet_standalone does not support functional read.");
+    return false;
   }
 
   int functionalWrite(Addr addr, Packet *pkt) {

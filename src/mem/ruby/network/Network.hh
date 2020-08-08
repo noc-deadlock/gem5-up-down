@@ -114,7 +114,9 @@ class Network : public ClockedObject
      * accesses to work correctly.
      */
     virtual bool functionalRead(Packet *pkt)
-    { fatal("Functional read not implemented.\n"); }
+    {
+        fatal("Functional read not implemented.\n");
+    }
     virtual uint32_t functionalWrite(Packet *pkt)
     { fatal("Functional write not implemented.\n"); }
 

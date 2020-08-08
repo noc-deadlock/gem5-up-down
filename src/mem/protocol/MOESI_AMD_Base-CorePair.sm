@@ -321,12 +321,13 @@ machine(MachineType:CorePair, "CP-like Core Coherence")
     return AccessPermission:NotPresent;
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     TBE tbe := TBEs.lookup(addr);
     if(is_valid(tbe)) {
-      testAndRead(addr, tbe.DataBlk, pkt);
+      return testAndRead(addr, tbe.DataBlk, pkt);
     } else {
       functionalMemoryRead(pkt);
+      return true;
     }
   }
 

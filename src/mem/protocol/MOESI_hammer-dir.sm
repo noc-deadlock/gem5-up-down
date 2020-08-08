@@ -270,12 +270,13 @@ machine(MachineType:Directory, "AMD Hammer-like protocol")
     getDirectoryEntry(addr).changePermission(Directory_State_to_permission(state));
   }
 
-  void functionalRead(Addr addr, Packet *pkt) {
+  bool functionalRead(Addr addr, Packet *pkt) {
     TBE tbe := TBEs[addr];
     if(is_valid(tbe)) {
-      testAndRead(addr, tbe.DataBlk, pkt);
+      return testAndRead(addr, tbe.DataBlk, pkt);
     } else {
       functionalMemoryRead(pkt);
+      true;
     }
   }
 

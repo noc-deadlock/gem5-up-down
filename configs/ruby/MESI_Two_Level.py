@@ -132,6 +132,7 @@ def create_system(options, full_system, system, dma_ports, bootmem,
         l1_cntrl.responseToL1Cache = MessageBuffer()
         l1_cntrl.responseToL1Cache.slave = ruby_system.network.master
 
+        l1_cntrl.triggerQueue = MessageBuffer()
 
     l2_index_start = block_size_bits + l2_bits
 

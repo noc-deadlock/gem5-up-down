@@ -30,9 +30,9 @@
 
 from m5.params import *
 from m5.proxy import *
-from m5.objects.Network import RubyNetwork
-from m5.objects.BasicRouter import BasicRouter
-from m5.objects.ClockedObject import ClockedObject
+from Network import RubyNetwork
+from BasicRouter import BasicRouter
+from ClockedObject import ClockedObject
 
 class GarnetNetwork(RubyNetwork):
     type = 'GarnetNetwork'
@@ -46,8 +46,16 @@ class GarnetNetwork(RubyNetwork):
         "0: Weight-based Table, 1: XY, 2: Custom");
     enable_fault_model = Param.Bool(False, "enable network fault model");
     fault_model = Param.FaultModel(NULL, "network fault model");
-    garnet_deadlock_threshold = Param.UInt32(50000,
+    garnet_deadlock_threshold = Param.UInt32(10000,
                               "network-level deadlock threshold")
+    sim_type = Param.Int(Parent.sim_type, "simulation_type")
+    warmup_cycles = Param.Int(Parent.warmup_cycles, "warmup_cycles")
+    marked_flits = Param.Int(Parent.marked_flits, "number of marked flits")
+    conf_file = Param.String("up-down routing configuration file")
+    up_dn = Param.UInt32(0, "if set 1 then it enables up/dn routing")
+    escape_vc = Param.UInt32(0, "if set to 1 then enable escapeVC")
+    ni_inj = Param.String(Parent.ni_inj,
+                "chice of packet injection manner from NIC to network")
 
 class GarnetNetworkInterface(ClockedObject):
     type = 'GarnetNetworkInterface'
